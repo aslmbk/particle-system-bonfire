@@ -13,6 +13,7 @@ attribute vec2 data;
 
 varying vec4 vColor;
 varying float vSpinSpeed;
+varying vec3 vWorldPosition;
 
 void main() {
   float life = data.x;
@@ -26,13 +27,15 @@ void main() {
   float twinkleFactor = mix(1.0, sin(uTime * 10.0 + id * TAU) * 0.5 + 0.5, twinkle);
   color.a *= twinkleFactor;
 
-  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+  vec4 viewPosition = viewMatrix * worldPosition;
 
-  gl_Position = projectionMatrix * mvPosition;
+  gl_Position = projectionMatrix * viewPosition;
 
   gl_PointSize = size * uSize * uResolution.y;
-  gl_PointSize *= (1.0 / -mvPosition.z);
+  gl_PointSize *= (1.0 / -viewPosition.z);
 
   vColor = color;
   vSpinSpeed = uSpinSpeed * (uTime * PI + id * TAU);
+  vWorldPosition = worldPosition.xyz;
 }

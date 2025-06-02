@@ -12,13 +12,14 @@ import {
   Attractor,
 } from "./particles";
 import { Loader } from "./engine/Loader";
-import { MATH } from "./lib";
+import { MATH, NOISE } from "./lib";
 
 export class ParticlesManager {
   private particleSystem!: ParticleSystem;
   private fireMaterial!: THREE.ShaderMaterial;
   private smokeMaterial!: THREE.ShaderMaterial;
   private materials: THREE.ShaderMaterial[] = [];
+  private fireLight: THREE.PointLight | null = null;
 
   public scene = new THREE.Group();
 
@@ -28,6 +29,7 @@ export class ParticlesManager {
       this.initFireMaterial(loader, viewport),
       this.initSmokeMaterial(loader, viewport),
     ]).then(() => {
+      this.createFireLight();
       this.createFireEmitter();
       this.createSmokeEmitter();
     });
@@ -79,11 +81,16 @@ export class ParticlesManager {
         ),
         uTwinkleOverLife: new THREE.Uniform(twinkleOverLife.toTexture()),
         uSpinSpeed: new THREE.Uniform(0),
+        uLightFactor: new THREE.Uniform(0),
+        uLightIntensity: new THREE.Uniform(0),
       },
       transparent: true,
       depthWrite: false,
       depthTest: true,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
     });
     this.materials.push(this.fireMaterial);
   }
@@ -95,7 +102,7 @@ export class ParticlesManager {
 
     const sizeOverLife = new MATH.FloatInterpolant([
       { time: 0, value: 3 },
-      { time: 6, value: 24 },
+      { time: 6, value: 7 },
     ]);
 
     const twinkleOverLife = new MATH.FloatInterpolant([
@@ -105,7 +112,7 @@ export class ParticlesManager {
 
     const alphaOverLife = new MATH.FloatInterpolant([
       { time: 0, value: 0 },
-      { time: 1, value: 0.75 },
+      { time: 0.5, value: 0.85 },
       { time: 6, value: 0 },
     ]);
 
@@ -126,17 +133,22 @@ export class ParticlesManager {
             viewport.height * viewport.pixelRatio
           )
         ),
-        uSize: new THREE.Uniform(0.2),
+        uSize: new THREE.Uniform(0.5),
         uSizeOverLife: new THREE.Uniform(sizeOverLife.toTexture()),
         uColorOverLife: new THREE.Uniform(
           colorOverLife.toTexture(alphaOverLife)
         ),
         uTwinkleOverLife: new THREE.Uniform(twinkleOverLife.toTexture()),
         uSpinSpeed: new THREE.Uniform(0),
+        uLightFactor: new THREE.Uniform(1),
+        uLightIntensity: new THREE.Uniform(4),
       },
       transparent: true,
       depthWrite: false,
-      blending: THREE.NormalBlending,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
     });
     this.materials.push(this.smokeMaterial);
   }
@@ -193,7 +205,7 @@ export class ParticlesManager {
       renderer: particleRenderer,
       shape: new PointShape({
         positionRadiusVariance: 1,
-        position: new THREE.Vector3(0, 6, 0),
+        position: new THREE.Vector3(0, 8, 0),
       }),
       maxLife: 6,
       velocityMagnitude: 4,
@@ -212,14 +224,34 @@ export class ParticlesManager {
     return emiiter;
   }
 
+  private createFireLight() {
+    this.fireLight = new THREE.PointLight(0xf8b867, 100);
+    this.fireLight.position.set(0, 4, 0);
+    this.scene.add(this.fireLight);
+  }
+
   public update(params: TimeEventArgs) {
     this.particleSystem.step(params);
+
+    const noise = NOISE.noise1D(params.elapsed * 4);
+
     for (let i = this.materials.length - 1; i >= 0; i--) {
       if (this.materials[i].userData.isDisposed) {
         this.materials.splice(i, 1);
         continue;
       }
       this.materials[i].uniforms.uTime.value = params.elapsed;
+      this.materials[i].uniforms.uLightIntensity.value = MATH.remap(
+        -1,
+        1,
+        0.75,
+        2.0,
+        noise
+      );
+    }
+
+    if (this.fireLight) {
+      this.fireLight.intensity = MATH.remap(-1, 1, 15, 50, noise);
     }
   }
 

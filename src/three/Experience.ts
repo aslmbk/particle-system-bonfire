@@ -3,7 +3,6 @@ import { DebugController } from "./DebugController";
 import { Config } from "./Config";
 import { ParticlesManager } from "./ParticlesManager";
 import * as THREE from "three";
-import { MATH, NOISE } from "./lib";
 
 export class Experience extends Engine {
   private static instance: Experience | null = null;
@@ -56,15 +55,5 @@ export class Experience extends Engine {
   private createLights() {
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.1);
     this.scene.add(ambientLight);
-
-    const pointLight = new THREE.PointLight(0xf8b867, 100);
-    pointLight.position.set(0, 4, 0);
-    this.scene.add(pointLight);
-
-    this.time.events.on("tick", ({ elapsed }) => {
-      const noise = NOISE.noise1D(elapsed * 2);
-      const intensity = MATH.remap(-1, 1, 15, 50, noise);
-      pointLight.intensity = intensity;
-    });
   }
 }
