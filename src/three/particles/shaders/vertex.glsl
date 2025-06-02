@@ -7,6 +7,7 @@ uniform float uSize;
 uniform sampler2D uSizeOverLife;
 uniform sampler2D uColorOverLife;
 uniform sampler2D uTwinkleOverLife;
+uniform float uSpinSpeed;
 
 attribute vec2 data;
 
@@ -33,5 +34,5 @@ void main() {
   gl_PointSize *= (1.0 / -mvPosition.z);
 
   vColor = color;
-  vSpinSpeed = uTime * PI + id * TAU;
+  vSpinSpeed = uSpinSpeed * (uTime * PI + id * TAU);
 }

@@ -12,7 +12,6 @@ void main() {
 
   uv = (uv - 0.5) * r + 0.5;
 
-
   vec4 color = texture2D(uMap, uv);
   color *= vColor;
 

@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { MATH } from "./lib";
 import { TimeEventArgs } from "./engine/Time";
 import { Viewport, ViewportEventArgs } from "./engine/Viewport";
 import {
@@ -10,12 +9,14 @@ import {
   Particle,
   EmitterShape,
   ParticleSystem,
+  Attractor,
 } from "./particles";
 import { Loader } from "./engine/Loader";
+import { MATH } from "./lib";
 
 export class ParticlesManager {
   private particleSystem!: ParticleSystem;
-  private fireworkMaterial!: THREE.ShaderMaterial;
+  private fireMaterial!: THREE.ShaderMaterial;
   private smokeMaterial!: THREE.ShaderMaterial;
   private materials: THREE.ShaderMaterial[] = [];
 
@@ -24,47 +25,42 @@ export class ParticlesManager {
   constructor(loader: Loader, viewport: Viewport) {
     this.particleSystem = new ParticleSystem();
     Promise.all([
-      this.initFireworkMaterial(loader, viewport),
+      this.initFireMaterial(loader, viewport),
       this.initSmokeMaterial(loader, viewport),
     ]).then(() => {
-      this.createTrailEmitter();
+      this.createFireEmitter();
+      this.createSmokeEmitter();
     });
-
-    this.scene.position.y = -15;
   }
 
-  private async initFireworkMaterial(loader: Loader, viewport: Viewport) {
+  private async initFireMaterial(loader: Loader, viewport: Viewport) {
+    const mapTexture = await loader.loadTextureAsync({
+      url: "/textures/fire.png",
+    });
+
     const sizeOverLife = new MATH.FloatInterpolant([
-      { time: 0, value: 0.2 },
-      { time: 0.1, value: 1 },
-      { time: 6, value: 1 },
-      { time: 10, value: 0 },
+      { time: 0, value: 3 },
+      { time: 0.25, value: 10 },
+      { time: 2, value: 0 },
+    ]);
+
+    const twinkleOverLife = new MATH.FloatInterpolant([
+      { time: 0, value: 0 },
+      { time: 1, value: 0 },
     ]);
 
     const alphaOverLife = new MATH.FloatInterpolant([
       { time: 0, value: 0 },
       { time: 0.25, value: 1 },
-      { time: 3, value: 1 },
-      { time: 3.1, value: 0 },
+      { time: 2, value: 0 },
     ]);
 
     const colorOverLife = new MATH.ColorInterpolant([
-      { time: 0, value: new THREE.Color().setHSL(0, 1, 0.75) },
-      { time: 2, value: new THREE.Color().setHSL(0.5, 1, 0.75) },
-      { time: 5, value: new THREE.Color().setHSL(1, 1, 0.75) },
+      { time: 0, value: new THREE.Color(0xffffc0) },
+      { time: 1, value: new THREE.Color(0xff0000) },
     ]);
 
-    const twinkleOverLife = new MATH.FloatInterpolant([
-      { time: 0, value: 0 },
-      { time: 3, value: 1 },
-      { time: 4, value: 1 },
-    ]);
-
-    const mapTexture = await loader.loadTextureAsync({
-      url: "/textures/star.png",
-    });
-
-    this.fireworkMaterial = new THREE.ShaderMaterial({
+    this.fireMaterial = new THREE.ShaderMaterial({
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
       uniforms: {
@@ -76,44 +72,47 @@ export class ParticlesManager {
             viewport.height * viewport.pixelRatio
           )
         ),
-        uSize: new THREE.Uniform(0.5),
+        uSize: new THREE.Uniform(0.2),
         uSizeOverLife: new THREE.Uniform(sizeOverLife.toTexture()),
         uColorOverLife: new THREE.Uniform(
           colorOverLife.toTexture(alphaOverLife)
         ),
         uTwinkleOverLife: new THREE.Uniform(twinkleOverLife.toTexture()),
+        uSpinSpeed: new THREE.Uniform(0),
       },
       transparent: true,
       depthWrite: false,
+      depthTest: true,
       blending: THREE.AdditiveBlending,
     });
-    this.materials.push(this.fireworkMaterial);
+    this.materials.push(this.fireMaterial);
   }
 
   private async initSmokeMaterial(loader: Loader, viewport: Viewport) {
-    const sizeOverLife = new MATH.FloatInterpolant([
-      { time: 0, value: 1 },
-      { time: 1, value: 1.5 },
-      { time: 2, value: 2.5 },
-    ]);
-
-    const alphaOverLife = new MATH.FloatInterpolant([
-      { time: 0, value: 0.3 },
-      { time: 0.05, value: 0.5 },
-      { time: 0.1, value: 0.3 },
-      { time: 0.2, value: 0.05 },
-      { time: 0.4, value: 0 },
-      { time: 1, value: 0 },
-    ]);
-
-    const colorOverLife = new MATH.ColorInterpolant([
-      { time: 0, value: new THREE.Color(0xcecece) },
-      { time: 1, value: new THREE.Color(0x000000) },
-    ]);
-
     const mapTexture = await loader.loadTextureAsync({
       url: "/textures/smoke.png",
     });
+
+    const sizeOverLife = new MATH.FloatInterpolant([
+      { time: 0, value: 3 },
+      { time: 6, value: 24 },
+    ]);
+
+    const twinkleOverLife = new MATH.FloatInterpolant([
+      { time: 0, value: 0 },
+      { time: 1, value: 0 },
+    ]);
+
+    const alphaOverLife = new MATH.FloatInterpolant([
+      { time: 0, value: 0 },
+      { time: 1, value: 0.75 },
+      { time: 6, value: 0 },
+    ]);
+
+    const colorOverLife = new MATH.ColorInterpolant([
+      { time: 0, value: new THREE.Color(0xc0c0c0) },
+      { time: 1, value: new THREE.Color(0x404040) },
+    ]);
 
     this.smokeMaterial = new THREE.ShaderMaterial({
       vertexShader: vertexShader,
@@ -127,12 +126,13 @@ export class ParticlesManager {
             viewport.height * viewport.pixelRatio
           )
         ),
-        uSize: new THREE.Uniform(0.5),
+        uSize: new THREE.Uniform(0.2),
         uSizeOverLife: new THREE.Uniform(sizeOverLife.toTexture()),
         uColorOverLife: new THREE.Uniform(
           colorOverLife.toTexture(alphaOverLife)
         ),
-        uTwinkleOverLife: new THREE.Uniform(null),
+        uTwinkleOverLife: new THREE.Uniform(twinkleOverLife.toTexture()),
+        uSpinSpeed: new THREE.Uniform(0),
       },
       transparent: true,
       depthWrite: false,
@@ -141,109 +141,75 @@ export class ParticlesManager {
     this.materials.push(this.smokeMaterial);
   }
 
-  private createTrailEmitter() {
-    const material = this.fireworkMaterial.clone();
+  private createFireEmitter() {
+    const material = this.fireMaterial.clone();
     this.materials.push(material);
     const particleRenderer = new ParticleRenderer({
       material: material,
-      maxParticles: 100,
+      maxParticles: 200,
       scene: this.scene,
+      frustumCulled: false,
     });
-    const particleShapePairs = new Map<Particle, PointShape>();
-    const particleEmitterPairs = new Map<Particle, Emitter>();
+
+    material.uniforms.uSpinSpeed.value = Math.PI / 4;
+
+    const attractor = new Attractor(new THREE.Vector3(0, 5, 0), 2, 3);
 
     const emiiter = new Emitter({
       renderer: particleRenderer,
-      shape: new PointShape(),
-      maxLife: 3,
-      velocityMagnitude: 30,
-      velocityMagnitudeVariance: 0,
+      shape: new PointShape({ positionRadiusVariance: 0.5 }),
+      maxLife: 2,
+      velocityMagnitude: 4,
+      velocityMagnitudeVariance: 1,
       rotation: new THREE.Quaternion(),
       rotationAngularVariance: Math.PI / 8,
       gravity: new THREE.Vector3(0, -9.81, 0),
-      gravityStrength: 0.4,
-      dragCoefficient: 1,
-      maxParticles: 100,
-      emissionRate: 1,
+      gravityStrength: 0,
+      dragCoefficient: 0.5,
+      maxParticles: 200,
+      emissionRate: 50,
       maxEmission: Number.MAX_SAFE_INTEGER,
-      onCreateParticle: (particle) => {
-        const shape = new PointShape();
-        particleShapePairs.set(particle, shape);
-        const emitter = this.createSmokeEmitter(shape);
-        particleEmitterPairs.set(particle, emitter);
-      },
-      onUpdateParticle: (particle) => {
-        const shape = particleShapePairs.get(particle);
-        if (shape) shape.position.copy(particle.position);
-      },
-      onRemoveParticle: (particle) => {
-        const smokeShape = particleShapePairs.get(particle);
-        if (smokeShape) particleShapePairs.delete(particle);
-        const smokeEmitter = particleEmitterPairs.get(particle);
-        if (smokeEmitter) smokeEmitter.stopEmission();
-        particleEmitterPairs.delete(particle);
-
-        const popShape = new PointShape();
-        popShape.position.copy(particle.position);
-        this.createPopEmitter(popShape);
-      },
+      attractors: [attractor],
     });
     this.particleSystem.addEmitter(emiiter);
+    return emiiter;
   }
 
-  private createSmokeEmitter(shape: EmitterShape = new PointShape()) {
+  private createSmokeEmitter() {
     const material = this.smokeMaterial.clone();
     this.materials.push(material);
     const particleRenderer = new ParticleRenderer({
       material: material,
       maxParticles: 500,
       scene: this.scene,
+      frustumCulled: false,
     });
+
+    material.uniforms.uSpinSpeed.value = Math.PI / 8;
+
+    const attractor = new Attractor(new THREE.Vector3(10, 21, 0), 1.8, 8);
 
     const emiiter = new Emitter({
       renderer: particleRenderer,
-      shape,
-      maxLife: 2,
+      shape: new PointShape({
+        positionRadiusVariance: 1,
+        position: new THREE.Vector3(0, 6, 0),
+      }),
+      maxLife: 6,
       velocityMagnitude: 4,
-      velocityMagnitudeVariance: 2,
+      velocityMagnitudeVariance: 1,
       rotation: new THREE.Quaternion(),
       rotationAngularVariance: Math.PI / 8,
       gravity: new THREE.Vector3(0, -9.81, 0),
       gravityStrength: 0,
-      dragCoefficient: 0.5,
+      dragCoefficient: 0.2,
       maxParticles: 500,
-      emissionRate: 100,
-      maxEmission: 500,
+      emissionRate: 40,
+      maxEmission: Number.MAX_SAFE_INTEGER,
+      attractors: [attractor],
     });
     this.particleSystem.addEmitter(emiiter);
     return emiiter;
-  }
-
-  private createPopEmitter(shape: EmitterShape = new PointShape()) {
-    const material = this.fireworkMaterial.clone();
-    this.materials.push(material);
-    const particleRenderer = new ParticleRenderer({
-      material: material,
-      maxParticles: 500,
-      scene: this.scene,
-    });
-
-    const emiiter = new Emitter({
-      renderer: particleRenderer,
-      shape,
-      maxLife: 3,
-      velocityMagnitude: 20,
-      velocityMagnitudeVariance: 10,
-      rotation: new THREE.Quaternion(),
-      rotationAngularVariance: Math.PI * 2,
-      gravity: new THREE.Vector3(0, -9.81, 0),
-      gravityStrength: 0.3,
-      dragCoefficient: 4,
-      maxParticles: 500,
-      emissionRate: 5000,
-      maxEmission: 500,
-    });
-    this.particleSystem.addEmitter(emiiter);
   }
 
   public update(params: TimeEventArgs) {
@@ -268,11 +234,33 @@ export class ParticlesManager {
 }
 
 class PointShape extends EmitterShape {
-  public readonly position = new THREE.Vector3();
+  public readonly position: THREE.Vector3;
+  private positionRadiusVariance: number;
+
+  constructor(params?: {
+    position?: THREE.Vector3;
+    positionRadiusVariance?: number;
+  }) {
+    super();
+    this.position = params?.position ?? new THREE.Vector3();
+    this.positionRadiusVariance = params?.positionRadiusVariance ?? 0;
+  }
 
   emit() {
     const particle = new Particle();
     particle.position.copy(this.position);
+
+    const phi = MATH.random() * Math.PI * 2;
+    const theta = MATH.random() * Math.PI;
+    const radius = MATH.random() * this.positionRadiusVariance;
+
+    const direction = new THREE.Vector3(
+      Math.sin(theta) * Math.cos(phi),
+      Math.cos(theta),
+      Math.sin(theta) * Math.sin(phi)
+    );
+    particle.position.add(direction.multiplyScalar(radius));
+
     return particle;
   }
 }

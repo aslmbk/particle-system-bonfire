@@ -5,6 +5,7 @@ export type ParticleRendererParams = {
   maxParticles: number;
   material: THREE.ShaderMaterial;
   scene: THREE.Object3D;
+  frustumCulled: boolean;
 };
 
 export class ParticleRenderer {
@@ -35,6 +36,8 @@ export class ParticleRenderer {
     );
 
     this.particles = new THREE.Points(this.geometry, this.params.material);
+    // The frustum culling depends on the bounding box/sphere of the particles (i.e the geometry)
+    this.particles.frustumCulled = this.params.frustumCulled;
     this.params.scene.add(this.particles);
   }
 

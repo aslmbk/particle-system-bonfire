@@ -3,6 +3,7 @@ import { Particle } from "./Particle";
 import { ParticleRenderer } from "./ParticleRenderer";
 import { Time } from "./types";
 import * as THREE from "three";
+import { Attractor } from "./Attractor";
 
 export type EmitterParams = {
   maxLife: number;
@@ -23,6 +24,8 @@ export type EmitterParams = {
 
   renderer: ParticleRenderer;
   shape: EmitterShape;
+
+  attractors: Attractor[];
 
   onCreateParticle?: (particle: Particle) => void;
   onUpdateParticle?: (particle: Particle) => void;
@@ -101,6 +104,17 @@ export class Emitter {
     forces.add(
       particle.velocity.clone().multiplyScalar(-this.params.dragCoefficient)
     );
+
+    for (const attractor of this.params.attractors) {
+      const direction = attractor.position.clone().sub(particle.position);
+      const distance = direction.length();
+      direction.normalize();
+
+      const attractorForce =
+        attractor.intensity / (1 + (distance / attractor.radius) ** 2);
+      forces.add(direction.multiplyScalar(attractorForce));
+    }
+
     particle.velocity.add(forces.multiplyScalar(time.delta));
 
     const displacement = particle.velocity.clone().multiplyScalar(time.delta);
